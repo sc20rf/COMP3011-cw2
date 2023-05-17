@@ -166,18 +166,23 @@ def create_invoice(request, booking_id):
     if request.method == 'GET':
         return HttpResponseBadRequest('A GET request was received. This URL is set up for POST requests only')
 
+    # Extracts the preferred vendor from the request
     preferred_vendor_param = request.POST.get('preferred_vendor')
+
+    # Checks if the preferred vendor parameter is missing from the request
     if not preferred_vendor_param:
         return HttpResponseBadRequest('Missing required parameter: \'preferred_vendor\'')
-
+    # Performs validation for the preferred vendor
     if not PaymentProvider.objects.filter(pp_id=preferred_vendor_param).exists():
         return HttpResponseBadRequest('\'preferred_vendor\' is invalid')
-
+    
+    # Retrieves the passenger booking for given booking id
     try:
         booking = Booking.objects.get(booking_id=booking_id)
     except Booking.DoesNotExist:
         return HttpResponseBadRequest('\'booking_id\' is invalid')
 
+    # Check if the booking already has an invoice
     if booking.invoice_id is not None:
         return HttpResponseBadRequest(f'Given \'booking_id\': {booking_id} already has an invoice: {booking.invoice_id}')
 
@@ -186,10 +191,12 @@ def create_invoice(request, booking_id):
     given_provider = PaymentProvider.objects.get(pp_id=preferred_vendor_param)
     url_to_call = given_provider.url + 'invoice/'
 
+    # Gets the flight associated with the booking and determine the amount to be invoiced
     flight = Flight.objects.get(flight_id=booking.flight_id.flight_id)
     amount = flight.eco_price if booking.booking_class == 'eco' else flight.bus_price
     amount = int(amount * 100)
 
+    # Defines the payload for the POST request to the payment provider's API
     input_data = {
         "api_key": '9090',
         "amount": amount,
@@ -220,13 +227,17 @@ def confirm_invoice(request, booking_id):
     if request.method == 'GET':
         return HttpResponseBadRequest('A GET request was received. This URL is set up for POST requests only')
 
+    # Retrieves the passenger booking for given booking id
     try:
         booking = Booking.objects.get(booking_id=booking_id)
     except Booking.DoesNotExist:
         return HttpResponseBadRequest('\'booking_id\' is invalid')
 
+    # Gets the payment provider details for the booking
     provider = PaymentProvider.objects.get(pp_id=booking.payment_provider.pp_id)
+    # The URL to call the payment provider's API to confirm the invoice
     url_to_call = provider.url + f'invoice/{booking.invoice_id}/'
+    # Define the payload for the GET request to the payment provider's API
     input_json = json.dumps({'api_key': '9090'})
 
     response = requests.get(url_to_call, data=input_json, headers={'Content-Type': 'application/json'})
